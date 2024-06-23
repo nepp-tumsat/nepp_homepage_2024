@@ -12,8 +12,12 @@ const vertexShaderSource = `
 const fragmentShaderSource = `
     precision mediump float;
     varying vec2 vTextureCoord;
+    uniform sampler2D uSampler;
     void main(void) {
-        gl_FragColor = vec4(vTextureCoord.x, 0.0, 1.0 - vTextureCoord.x, 1.0); // 赤から青へのグラデーション
+        vec4 color = texture2D(uSampler, vTextureCoord);
+        // ここで色を変更することができます（例: グレースケール）
+        float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+        gl_FragColor = vec4(vec3(gray), color.a);
     }
 `;
 
@@ -85,11 +89,35 @@ function initBuffers(gl) {
     return vertexBuffer;
 }
 
+function initTexture(gl,image){
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+    // Flip the image's y axis to match the WebGL texture coordinate system
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+    // Set the parameters so we can render any size image
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    // Upload the image into the texture
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+    // Bind the texture to texture unit 0
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+}
+
 function drawScene(gl, shaderProgram, vertexBuffer) {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, vertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, 2, gl.FLOAT, false, 4 * Float32Array.BYTES_PER_ELEMENT, 2 * Float32Array.BYTES_PER_ELEMENT);
+
+    gl.uniform1i(shaderProgram.samplerUniform, 0);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, vertexBuffer.numItems);
 }
@@ -108,6 +136,15 @@ function start() {
     const shaderProgram = initShaders(gl);
     const vertexBuffer = initBuffers(gl);
 
+    const image = document.getElementById('main-pc.jpg');
+    image.onload = function(){
+        initTexture(gl,image);
+        drawScene(gl,shaderProgram,vertexBuffer);
+    }
+
+    if(image.complete){
+        image.onload();
+    }
     drawScene(gl, shaderProgram, vertexBuffer);
 }
 
